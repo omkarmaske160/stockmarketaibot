@@ -193,10 +193,21 @@ for symbol in selected_symbols:
 
     stock_data_cache[symbol] = df
 
-    all_time_high = float(df["Close"].max())
-    all_time_low = float(df["Close"].min())
-    current_price = float(df["Close"].iloc[-1])
-    prev_close = float(df["Close"].iloc[-2]) if len(df) > 1 else current_price
+    # Fix yfinance MultiIndex / non-numeric Close values.
+    # Everything else in the original dashboard is kept unchanged.
+    close = df["Close"]
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+    close = pd.to_numeric(close, errors="coerce").dropna()
+
+    if close.empty:
+        st.warning(f"No valid closing-price data found for {symbol}.")
+        continue
+
+    all_time_high = float(close.max())
+    all_time_low = float(close.min())
+    current_price = float(close.iloc[-1])
+    prev_close = float(close.iloc[-2]) if len(close) > 1 else current_price
     daily_change_pct = (
         (current_price - prev_close) / prev_close * 100 if prev_close else 0.0
     )

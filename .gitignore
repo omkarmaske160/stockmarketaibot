@@ -1,0 +1,7 @@
+# Never upload your local secrets file to GitHub
+.streamlit/secrets.toml
+
+# Common Python junk
+__pycache__/
+*.pyc
+.DS_Store

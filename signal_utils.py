@@ -4,6 +4,7 @@ Shared logic between the dashboard (app.py) and the hourly checker
 explained.
 """
 
+import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 
 FEATURES = ["SMA10", "SMA50", "Return", "Volatility", "RSI"]
@@ -11,6 +12,13 @@ FEATURES = ["SMA10", "SMA50", "Return", "Volatility", "RSI"]
 
 def compute_features(df):
     df = df.copy()
+    # Defensive: yfinance sometimes returns MultiIndex columns (e.g. when the
+    # ticker level gets attached even for a single symbol). Flatten to plain
+    # column names so every calculation below gets a clean 1-D Series.
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
+    df = df.dropna(subset=["Close"])
     df["SMA10"] = df["Close"].rolling(10).mean()
     df["SMA50"] = df["Close"].rolling(50).mean()
     df["Return"] = df["Close"].pct_change()
@@ -41,11 +49,12 @@ def train_and_predict(df):
 def explain_signal(latest_row):
     """Return a short list of plain-English reasons behind the current signal."""
     reasons = []
-    sma10 = latest_row["SMA10"]
-    sma50 = latest_row["SMA50"]
-    rsi = latest_row["RSI"]
-    ret = latest_row["Return"]
+    sma10 = float(latest_row["SMA10"])
+    sma50 = float(latest_row["SMA50"])
+    rsi = float(latest_row["RSI"])
+    ret = float(latest_row["Return"])
     vol = latest_row["Volatility"]
+    vol = float(vol) if vol is not None and not pd.isna(vol) else 0.0
 
     if sma10 > sma50:
         reasons.append("Short-term average is above the long-term average (uptrend)")

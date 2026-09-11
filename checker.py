@@ -39,12 +39,18 @@ def load_price_targets():
 
 
 def get_daily_data(symbol):
-    return yf.download(symbol + ".NS", period="5y", interval="1d", progress=False)
+    df = yf.download(symbol + ".NS", period="5y", interval="1d", progress=False)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df
 
 
 def get_recent_intraday(symbol):
     try:
-        return yf.download(symbol + ".NS", period="1d", interval="5m", progress=False)
+        df = yf.download(symbol + ".NS", period="1d", interval="5m", progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        return df
     except Exception:
         return pd.DataFrame()
 
@@ -84,9 +90,12 @@ def build_report():
         if daily.empty:
             continue
 
-        ath = float(daily["Close"].max())
-        atl = float(daily["Close"].min())
-        current_price = float(daily["Close"].iloc[-1])
+        close = pd.to_numeric(daily["Close"], errors="coerce").dropna()
+        if close.empty:
+            continue
+        ath = float(close.max())
+        atl = float(close.min())
+        current_price = float(close.iloc[-1])
 
         feat_df = compute_features(daily)
         pred, prob, latest_row = train_and_predict(feat_df)

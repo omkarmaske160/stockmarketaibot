@@ -36,7 +36,11 @@ def get_file(token, repo, path):
 
 
 def update_file(token, repo, path, new_content, message):
-    """Creates or updates a file in the repo. Returns True on success."""
+    """
+    Creates or updates a file in the repo.
+    Returns (success: bool, error_message: str or None) so the dashboard
+    can show exactly why a save failed instead of a generic message.
+    """
     url = f"{API_BASE}/repos/{repo}/contents/{path}"
     _, sha = get_file(token, repo, path)
     payload = {
@@ -45,8 +49,34 @@ def update_file(token, repo, path, new_content, message):
     }
     if sha:
         payload["sha"] = sha
+
     try:
         resp = requests.put(url, headers=_headers(token), json=payload, timeout=10)
-        return resp.status_code in (200, 201)
-    except Exception:
-        return False
+        if resp.status_code in (200, 201):
+            return True, None
+
+        try:
+            detail = resp.json().get("message", resp.text)
+        except Exception:
+            detail = resp.text
+
+        if resp.status_code == 401:
+            hint = "Your GITHUB_TOKEN is invalid or expired - generate a new one."
+        elif resp.status_code == 404:
+            hint = (
+                "Repo not found - check GITHUB_REPO is exactly "
+                "'yourusername/reponame' and the token has access to it."
+            )
+        elif resp.status_code == 403:
+            hint = (
+                "Permission denied - your token needs 'Contents: Read and write' "
+                "access on this specific repo."
+            )
+        else:
+            hint = ""
+
+        error_message = f"HTTP {resp.status_code}: {detail}" + (f" ({hint})" if hint else "")
+        return False, error_message
+
+    except Exception as e:
+        return False, f"Network/connection error: {e}"

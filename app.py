@@ -249,6 +249,24 @@ def cached_news(query, max_items=4):
     return get_news_headlines(query, max_items=max_items)
 
 
+@st.cache_data(ttl=3600)
+def get_working_gemini_model(api_key):
+    """
+    Google occasionally retires specific model version names. Rather than
+    hardcode one that can go stale, ask the API what's actually available
+    on this key and use the first model that supports chat-style generation.
+    """
+    try:
+        genai.configure(api_key=api_key)
+        for m in genai.list_models():
+            methods = getattr(m, "supported_generation_methods", [])
+            if "generateContent" in methods:
+                return m.name
+    except Exception:
+        pass
+    return "gemini-1.5-flash"  # last-resort guess if listing itself fails
+
+
 # ----------------------------------------------------------------------
 # Compute everything for each selected stock FIRST (no rendering yet), so
 # we can show a summary bar before the detailed per-stock cards.
@@ -553,7 +571,8 @@ with tab_chat:
 
         try:
             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model_name = get_working_gemini_model(st.secrets["GEMINI_API_KEY"])
+            model = genai.GenerativeModel(model_name)
 
             full_prompt = (
                 "You are a helpful assistant discussing Indian stocks for an "
